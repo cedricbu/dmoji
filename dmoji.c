@@ -45,10 +45,17 @@ void describeSet(USet* set);
 void describeUChar(UChar32 c);
 void throwOneEmoji(int fd, UChar32 c);
 int throwEmojisAt(int fd);
+pid_t popen2(const char* cmd, char* const argv[], int* in, int* out);
 
 void print_ver();
 void print_help();
 
+
+const char* dmenu_cmd = "/usr/bin/dmenu";
+char* const dmenu_argv[] = { "dmenu", "-i", NULL };
+
+char* const xsel_argv[] = { "xsel", "--input", "--clipboard", NULL }; 
+const char* xsel_cmd = "/usr/bin/xsel";
 
 int main(int argc, char** argv) {
 
@@ -64,123 +71,58 @@ int main(int argc, char** argv) {
         }
     }
 
-    int p_choices[2]; // The file descriptor set to pipe the list of choices. [0] is for reading, [1] is for writing
-    int p_result[2]; // The file descriptor set to pipe the result
+    DBG("Launching menu\n");
+    int child_in, child_out;
+    int ret;
+    char buff[BUFF_SIZE];
+    size_t size;
     pid_t pid;
 
-    if ( pipe(p_choices) || pipe(p_result) ) {
-        err(1, "unable to pipe one of the file descriptor set");
+    pid = popen2( dmenu_cmd, dmenu_argv, &child_in, &child_out );
+    if ( pid < 0 ) {
+        errx(1, "Unable to popen2 %s", dmenu_cmd);
     }
 
-    pid = fork();
-    if ( pid == -1 ) {
-        err(1, "fork dmenu");
+    throwEmojisAt(child_in);
+    close(child_in);
+    wait(&ret);
+    
+    /* dmenu exit 0 on choice, 1 on no-choice (e.g.: escape) */
+    if (WEXITSTATUS(ret) > 1 ) {
+        warnx("dmenu seems to have returned an unusual exit: '%i'", WEXITSTATUS(ret));
     }
 
-    if ( pid > 0 ) {
-        // Parent: we write lines, wait for child and read
-        //  - set p_choices as child's input
-        //  - set p_result as child's output
-        //  - waitfor
-
-        char buff[BUFF_SIZE];
-        int ret = 0;
-        size_t size;
-
-        close(p_choices[0]);
-        close(p_result[1]);
-
-        throwEmojisAt(p_choices[1]);
-        close(p_choices[1]);
-        wait(&ret);
-        /* dmenu exit 0 on choice, 1 on no-choice (e.g.: escape) */
-        if (WEXITSTATUS(ret) > 1 ) {
-            warnx("dmenu seems to have returned an unusual exit: '%i'", WEXITSTATUS(ret));
-        }
-
-        /* Reminder: dmenu may return an arbitrary string, user typed. */
-        size = read(p_result[0], buff, BUFF_SIZE);
-        if ( size == 0 ) {
-            // No choice selected
-            DBG("No choice\n");
-            return 0;
-        }
-        buff[size-1] = '\0';  // Cut at the '\n'
-
-        DBG("choice is : '%s'\n", buff);
-
-        // cut to the space
-        char* p = strchr(buff, ' ');
-        if (p) {
-            *p = '\0';
-        }
-        DBG("sending to xsel: '%s'\n", buff);
-
-        // Now we send this to xsel's stdin
-        int p_clip[2];
-        if (pipe(p_clip) ) {
-            err(1, "Unable to pipe the clipboard file descriptor set");
-        }
-
-        pid = fork();
-        if ( pid == -1 ) {
-            err(1, "xsel fork");
-        }
-        if ( pid > 0 ) {
-            // parent, similar as above:
-            //  - write to p_clip
-            //  - wait
-            close(p_clip[0]);
-
-            dprintf(p_clip[1], buff);
-            close(p_clip[1]);
-            wait(&ret);
-            if (WEXITSTATUS(ret) > 0 ) {
-                warnx("xsel seems to have returned an unusual exit: '%i'", WEXITSTATUS(ret));
-            }
-            return 0;
-
-        } else {
-            // Child
-            //  - set p_clip as stdin
-            char* const argv2[] = { "xsel", "--input", "--clipboard", NULL }; 
-
-            close(p_clip[1]);
-            if (dup2(p_clip[0], 0) == -1) {
-                err(1, "dup p_clip to stdin");
-            }
-            close(p_clip[0]);
-            execv("/usr/bin/xsel", argv2);
-
-            // unreachable
-            err(1, "execv xsel");
-        }
-
-    } else {
-
-        // Child:
-        //  - set p_choices as stdin
-        //  - set p_result as stdout
-        //  - execv
-
-        char* const argv2[] = { "dmenu", "-i", NULL };
-
-        close(p_choices[1]);
-        close(p_result[0]);
-        if (dup2(p_choices[0], 0) == -1) {
-            err(1, "dup p_choices to stdin");
-        }
-        close(p_choices[0]);
-        if (dup2(p_result[1], 1) == -1){
-            err(1, "dup p_result to stdout");
-        }
-        close(p_result[1]);
-
-        execv("/usr/bin/dmenu", argv2 );
-
-        // unreachable
-        err(1, "execv dmenu");
+    /* Reminder: dmenu may return an arbitrary string, user typed. */
+    size = read(child_out, buff, BUFF_SIZE);
+    close(child_out);
+    if ( size == 0 ) {
+        // No choice selected
+        DBG("No choice\n");
+        return 0;
     }
+    buff[size-1] = '\0';  // Cut at the '\n'
+
+    DBG("choice is : '%s'\n", buff);
+
+    // cut to the space
+    char* p = strchr(buff, ' ');
+    if (p) {
+        *p = '\0';
+    }
+    DBG("sending to xsel: '%s'\n", buff);
+
+    pid = popen2( xsel_cmd, xsel_argv, &child_in, &child_out);
+    close(child_out);
+    if ( pid < 0 ) {
+        errx(1, "Unable to popen2 %s", xsel_cmd);
+    }
+    dprintf(child_in, buff);
+    close(child_in);
+    wait(&ret);
+    if (WEXITSTATUS(ret) > 0 ) {
+        warnx("xsel seems to have returned an unusual exit: '%i'", WEXITSTATUS(ret));
+    }
+    return 0;
 }
 
 
@@ -242,6 +184,10 @@ close_return:
     return 0;
 }
 
+/* 
+ * write `c` and its name (space separated) to file descriptor fd)
+ *
+ * */
 void throwOneEmoji(int fd, UChar32 c) {
     int32_t count = 0;
     char buff[BUFF_SIZE];
@@ -264,6 +210,53 @@ void throwOneEmoji(int fd, UChar32 c) {
     }
     DBG("sending to fd %i: '%s'\n", fd, buff);
     dprintf(fd, "%s\n", buff);
+}
+
+/* 
+ * Exec `cmd` with args `argv[]`. 
+ * fill up `in` and `out` piping to cmd
+ * returns cmd's PID (-1 on error. A warning with errno will be printed)
+ *
+ * */
+pid_t popen2(const char* cmd,  char* const argv[], int* in, int* out) {
+    DBG("Popen2: %s\n", cmd);
+
+    int p_in[2];
+    int p_out[2];
+    pid_t pid;
+
+    if ( pipe(p_in) || pipe(p_out) ) {
+        warn("Unable to pipe one of the pipes for command %s", cmd);
+        return -1;
+    }
+
+    pid = fork();
+    if ( pid < 0 ){
+        warn("Unable to fork to command %s", cmd);
+        return pid;
+    }
+
+    if ( pid > 0) {
+        // Parent
+        close(p_in[0]); // close the reader's input
+        close(p_out[1]); // close the writer's output
+        *in = p_in[1];
+        *out = p_out[0];
+        return pid;
+    } else {
+        // Child
+        close(p_in[1]);
+        close(p_out[0]);
+        if (dup2(p_in[0], 0) == -1 || dup2(p_out[1], 1) == -1) {
+            // post fork: we can exit rather than return
+            err(1, "command %s: unable to dup one of stdin/stdout", cmd);
+        }
+
+        execv(cmd, argv );
+
+        // unreachable
+        err(1, "execv %s failed", cmd);
+    }
 }
 
 void print_ver() {
