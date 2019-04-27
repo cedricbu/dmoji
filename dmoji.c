@@ -10,6 +10,8 @@
 #include <errno.h>
 #include <sys/wait.h>
 #include <err.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 
 /* Unicode */
@@ -41,15 +43,19 @@
 
 #define BUFF_SIZE 128
 
+
 void describeSet(USet* set);
 void describeUChar(UChar32 c);
 void throwOneEmoji(int fd, UChar32 c);
 int throwEmojisAt(int fd);
+int additional_data(int fd, const char* file);
+int clean_output(const char* sep, char* str);
 pid_t popen2(const char* cmd, char* const argv[], int* in, int* out);
 
 void print_ver();
 void print_help();
 
+const char* separator = " ;";
 
 const char* dmenu_cmd = "/usr/bin/dmenu";
 char* const dmenu_argv[] = { "dmenu", "-i", NULL };
@@ -59,8 +65,9 @@ const char* xsel_cmd = "/usr/bin/xsel";
 
 int main(int argc, char** argv) {
 
-    int c;
-    while ((c = getopt (argc, argv, "hV")) != -1) {
+    int c, opt_a=0;
+    char append[BUFF_SIZE];
+    while ((c = getopt (argc, argv, "hVa:")) != -1) {
         switch(c) {
             case 'V':
                 print_ver();
@@ -68,6 +75,10 @@ int main(int argc, char** argv) {
             case 'h':
                 print_help();
                 return 0;
+            case 'a':
+                opt_a = 1;
+                strncpy(append, optarg, BUFF_SIZE);
+                break;
         }
     }
 
@@ -84,6 +95,9 @@ int main(int argc, char** argv) {
     }
 
     throwEmojisAt(child_in);
+    if (opt_a) {
+         additional_data(child_in, append);
+    }
     close(child_in);
     wait(&ret);
     
@@ -93,22 +107,22 @@ int main(int argc, char** argv) {
     }
 
     /* Reminder: dmenu may return an arbitrary string, user typed. */
-    size = read(child_out, buff, BUFF_SIZE);
+    size = read(child_out, buff, BUFF_SIZE -1);
     close(child_out);
-    if ( size == 0 ) {
-        // No choice selected
-        DBG("No choice\n");
+    if ( size < 0) {
+        err(1, "Could not read output from dmenu");
+    }
+    
+    if ( size == 0 || WEXITSTATUS(ret) == 1 ) {
+        DBG("No choice\n"); // No choice selected
         return 0;
     }
-    buff[size-1] = '\0';  // Cut at the '\n'
-
-    DBG("choice is : '%s'\n", buff);
-
-    // cut to the space
-    char* p = strchr(buff, ' ');
-    if (p) {
-        *p = '\0';
+    if ( clean_output(separator, buff) ) {
+        DBG("Cut '%s' from '%s'\n", separator, buff);
+    } else {
+        DBG("'%s' was not found in returned '%s'\n", separator, buff);
     }
+
     DBG("sending to xsel: '%s'\n", buff);
 
     pid = popen2( xsel_cmd, xsel_argv, &child_in, &child_out);
@@ -200,7 +214,7 @@ void throwOneEmoji(int fd, UChar32 c) {
         warnx("could not append 0x%x to buff. Canceling this one", c);
         return;
     }
-    strcat(buff, " ");
+    strcat(buff, separator);
     count = strlen(buff);
     u_charName(c, U_UNICODE_CHAR_NAME, buff + count, BUFF_SIZE - count, &u_err);
 
@@ -211,6 +225,94 @@ void throwOneEmoji(int fd, UChar32 c) {
     DBG("sending to fd %i: '%s'\n", fd, buff);
     dprintf(fd, "%s\n", buff);
 }
+
+/*
+ * Remove possible newline
+ * Search for `sep` in `str`
+ * Replace the first character of `sep` in `str` with '\0'
+ * Return: 1 if `sep` was found, 0 otherwise
+ * */
+int clean_output(const char* sep, char* str) {
+    char* p;
+    if ( p = strchr(str, '\n') ) {
+        *p = '\0';  // Remove the new line if there is one
+    }
+
+    p = str;
+    while ( p && *p != '\0' ) {
+        p = strchr(p, *sep);
+        if ( p == NULL ) {
+            // no more possible match
+            return 0;
+        }
+
+        for ( int i = 1; ; i++) {
+            if ( *(sep + i*sizeof(char)) == '\0') {
+                // iterated the whole `sep` with no exit: we found it!
+                *p = '\0';
+                return 1;
+            }
+            if ( *(p + i*sizeof(char)) == '\0' ) { // test for end of string
+                return 0;
+            }
+
+            if ( *(p + i*sizeof(char)) != *(sep + i*sizeof(char)) ) {
+                break;  // not a match
+            }
+        }
+        
+        p += sizeof(char); // next position and start again
+    }
+    return 0;
+}
+
+/*
+ * Read list of additional stuff
+ *
+ * */
+int additional_data(int fd, const char* file) {
+    int count = 0;
+    FILE* f;
+    struct stat st;
+    char buff[BUFF_SIZE];
+
+    DBG("Additional data from file '%s'\n", file);
+
+    if ( stat(file, &st) || !S_ISREG(st.st_mode)) {
+        warn("Unable to stat %s, or is not a regular file. Make sure the file exist and is a regular file. Ignoring", file);
+        return 0;
+    }
+    f = fopen(file, "r");
+    if ( !f ) {
+        warn("Unable to open %s for reading. Ignoring", file);
+        return 0;
+    }
+
+    while ( fgets(buff, BUFF_SIZE - 1, f)) {  // Read a full line
+        // Lines starting with a space (' ') are considered as comments
+        if ( buff[0] == ' ') {
+            DBG("Ignoring comment '%s'\n", buff);
+            continue;
+        }
+        // Ensure there is a newline
+        size_t len = strlen(buff);
+        if ( buff[len] != '\n' ) {
+            buff[len] = '\n';
+            buff[len + 1] = '\0';
+        }
+        if ( len > 1 ) {
+            DBG("Addiing an entry of %i size\n", len);
+            count++;
+            dprintf(fd, buff);
+        } else {
+            DBG("Ignoring empty line\n");
+        }
+    }
+
+    fclose(f);
+    return count;
+}
+
 
 /* 
  * Exec `cmd` with args `argv[]`. 
@@ -265,4 +367,11 @@ void print_ver() {
 void print_help() {
     print_ver();
     printf("\nCalls dmenu with a list all all base emojis available from the ICU library, then copies the selected emoji to clipboard\n");
+    printf("Options:\n");
+    printf(" -a <file>\tFile containing additional data (e.g.: ASCII art, or more complex Unicode sequences)\n");
+    printf("\t\tAnything after the separator will be discarded before being sent to the clipboard\n");
+    printf("\n\nAddiitonal data file:\n");
+    printf("* Each line represents a new entry: the part to be copied, optionally followed by a separator ('%s') and a description to help the search\n", separator);
+    printf("* Lines starting with a space (i.e.: ' ') are ignored as comments\n");
+    printf("\n");
 }
