@@ -301,7 +301,7 @@ int additional_data(int fd, const char* file) {
             buff[len + 1] = '\0';
         }
         if ( len > 1 ) {
-            DBG("Addiing an entry of %i size\n", len);
+            DBG("Adding an entry of %i size\n", len);
             count++;
             dprintf(fd, buff);
         } else {
@@ -366,11 +366,11 @@ void print_ver() {
 } 
 void print_help() {
     print_ver();
-    printf("\nCalls dmenu with a list all all base emojis available from the ICU library, then copies the selected emoji to clipboard\n");
+    printf("\nCalls dmenu with a list of all base emojis available from the ICU library, then copies the selected emoji to clipboard\n");
     printf("Options:\n");
-    printf(" -a <file>\tFile containing additional data (e.g.: ASCII art, or more complex Unicode sequences)\n");
+    printf(" -a <file>\tFile containing additional data (e.g.: ASCII arts, or more complex Unicode sequences)\n");
     printf("\t\tAnything after the separator will be discarded before being sent to the clipboard\n");
-    printf("\n\nAddiitonal data file:\n");
+    printf("\n\nAdditional data file:\n");
     printf("* Each line represents a new entry: the part to be copied, optionally followed by a separator ('%s') and a description to help the search\n", separator);
     printf("* Lines starting with a space (i.e.: ' ') are ignored as comments\n");
     printf("\n");

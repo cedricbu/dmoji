@@ -1,0 +1,6 @@
+ Entries starting with a space are comments
+ They will be ignored.
+(✿◠‿◠) ;ASCII Face Happy
+(づ｡◕‿‿◕｡)づ ;ASCII Face Hug
+ヾ(￣0￣ )ノ ;ASCII Face Yawn
+(╯°□°)╯︵ ┻━┻ ;ASCII Table Flip
