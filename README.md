@@ -39,6 +39,14 @@ $ ./dmoji
 
 Then choose an emoji and paste it in a text file.
 
+4) Also use the static ASCII arts file
+
+```
+$ ./dmoji -a ./additional-entries/ascii-arts.txt
+```
+
+Since the additional entries contain 'ASCII' as part of their description, type 'ascii' in dmenu to filter them.
+
 * To install it in /usr/local/bin
 
 ```
@@ -64,11 +72,7 @@ Additional data file:
 * Lines starting with a space (i.e.: ' ') are ignored as comments
 ```
 
-
-Addiitonal data file:
-* Each line represents a new entry: the part to be copied, optionally followed by a separator (' ;') and a description to help the search
-* Lines starting with a space (i.e.: ' ') are ignored as comment
-```
+## Via a Window Manager shortcut
 
 Generally, you want to add a shortcut in your Window Manager to launch it. For example, in the i3 Window Manager :
 
