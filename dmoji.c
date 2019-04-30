@@ -58,7 +58,10 @@ void print_help();
 const char* separator = " ;";
 
 const char* dmenu_cmd = "/usr/bin/dmenu";
-char* const dmenu_argv[] = { "dmenu", "-i", NULL };
+char* dmenu_argv[] = { "dmenu", "-i", NULL };
+
+const char* rofi_cmd = "/usr/bin/rofi";
+char* rofi_argv[] = { "rofi", "-dmenu", "-i", NULL };
 
 char* const xsel_argv[] = { "xsel", "--input", "--clipboard", NULL }; 
 const char* xsel_cmd = "/usr/bin/xsel";
@@ -67,7 +70,11 @@ int main(int argc, char** argv) {
 
     int c, opt_a=0;
     char append[BUFF_SIZE];
-    while ((c = getopt (argc, argv, "hVa:")) != -1) {
+    
+    const char* menu_cmd = dmenu_cmd;
+    char** menu_argv = dmenu_argv;
+
+    while ((c = getopt (argc, argv, "hVa:r")) != -1) {
         switch(c) {
             case 'V':
                 print_ver();
@@ -79,6 +86,11 @@ int main(int argc, char** argv) {
                 opt_a = 1;
                 strncpy(append, optarg, BUFF_SIZE);
                 break;
+            case 'r':
+                DBG("Using Rofi menu\n");
+                menu_cmd = rofi_cmd;
+                menu_argv = rofi_argv;
+                break;
         }
     }
 
@@ -89,7 +101,7 @@ int main(int argc, char** argv) {
     size_t size;
     pid_t pid;
 
-    pid = popen2( dmenu_cmd, dmenu_argv, &child_in, &child_out );
+    pid = popen2( menu_cmd, menu_argv, &child_in, &child_out );
     if ( pid < 0 ) {
         errx(1, "Unable to popen2 %s", dmenu_cmd);
     }
@@ -368,6 +380,7 @@ void print_help() {
     print_ver();
     printf("\nCalls dmenu with a list of all base emojis available from the ICU library, then copies the selected emoji to clipboard\n");
     printf("Options:\n");
+    printf(" -r\t\tUse Rofi instead of dmenu (Rofi will be started in dmenu mode)\n");
     printf(" -a <file>\tFile containing additional data (e.g.: ASCII arts, or more complex Unicode sequences)\n");
     printf("\t\tAnything after the separator will be discarded before being sent to the clipboard\n");
     printf("\n\nAdditional data file:\n");

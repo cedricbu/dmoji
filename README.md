@@ -5,8 +5,8 @@ Unlike some other similar tools, dmoji does not use a static text file of emojis
 # Requirements
 
 * ICU library and headers
-* xsel : to copy data to clipboard
-* dmenu : a generic menu for X
+* `xsel` : to copy data to clipboard
+* A dynamic menu for X (`dmenu` and `rofi` are currently supported)
 
 
 # Compile
@@ -33,8 +33,16 @@ $ make
 
 3) Have a try
 
+3.a) with dmenu
+
 ```
 $ ./dmoji
+```
+
+3.b) with rofi
+
+```
+$ ./dmoji -r
 ```
 
 Then choose an emoji and paste it in a text file.
@@ -59,10 +67,11 @@ $ sudo make install
 
 ```
 $ ./dmoji -h
-dmoji version: 0.2, git 089eadf2c95a9316ac027c70662bc4a2a3810537
+dmoji version: 0.3-1-g4a6a62e, git 4a6a62e197279c0b2320124456c53af1d6809ab2
 
 Calls dmenu with a list of all base emojis available from the ICU library, then copies the selected emoji to clipboard
 Options:
+ -r             Use Rofi instead of dmenu (Rofi will be started in dmenu mode)
  -a <file>      File containing additional data (e.g.: ASCII arts, or more complex Unicode sequences)
                 Anything after the separator will be discarded before being sent to the clipboard
 
