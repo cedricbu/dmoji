@@ -169,7 +169,7 @@ int throwEmojisAt(int fd) {
     uset_applyIntPropertyValue(emojis, UCHAR_EMOJI, TRUE, &u_err) ;
     uset_removeRange(emojis, UCHAR_MIN_VALUE, 0xff);   // some regular ASCII are caught into UCHAR_EMOJI for some reason. 
 
-    if (u_err != U_ZERO_ERROR) {
+    if ( !U_SUCCESS(u_err) ) {
         warnx("error while applying EMOJI property: %s", u_errorName(u_err));
         goto close_return;
     }
@@ -182,7 +182,7 @@ int throwEmojisAt(int fd) {
         DBG("====== Item %i =======\n", i);
         UChar32 start = UCHAR_MIN_VALUE, end = UCHAR_MIN_VALUE;
         int32_t size = uset_getItem(emojis, i , &start, &end, u_buff, BUFF_SIZE, &u_err);
-        if (u_err != U_ZERO_ERROR || size < 0) {
+        if ( !U_SUCCESS(u_err) || size < 0) {
             warnx("error while getting first Item: %s", u_errorName(u_err));
             goto close_return;
         }
@@ -230,7 +230,7 @@ void throwOneEmoji(int fd, UChar32 c) {
     count = strlen(buff);
     u_charName(c, U_UNICODE_CHAR_NAME, buff + count, BUFF_SIZE - count, &u_err);
 
-    if (u_err != U_ZERO_ERROR) {
+    if ( !U_SUCCESS(u_err) ) {
         warnx("while describing UChar32 0x%x: %s. Cancelling this one", c, u_errorName(u_err));
         return;
     }
