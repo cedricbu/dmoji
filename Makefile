@@ -22,7 +22,7 @@ $(TARGET): $(SOURCE)
 	$(CC) $(LDFLAGS) $(SOURCE) $(CFLAGS) -o $(TARGET)
 
 debug:
-	$(CC) $(LDFLAGS) -DDEBUG $(CFLAGS) $(SOURCE) -o $(TARGET)
+	$(CC) $(LDFLAGS) -DDEBUG -fsanitize=address $(CFLAGS) $(SOURCE) -o $(TARGET)
 
 install:
 	install -d $(DESTDIR)$(PREFIX)$(BINDIR)
