@@ -60,19 +60,15 @@ void print_help();
 
 const char* separator = " ;";
 
-const char* dmenu_cmd = "/usr/bin/dmenu";
 char* dmenu_argv[] = { "dmenu", "-i", NULL };
 
-const char* rofi_cmd = "/usr/bin/rofi";
 char* rofi_argv[] = { "rofi", "-dmenu", "-i", NULL };
 
 char* const xsel_argv[] = { "xsel", "--input", "--clipboard", NULL }; 
-const char* xsel_cmd = "/usr/bin/xsel";
 
 int main(int argc, char** argv) {
     int c, opt_a=0;
     char append[BUFF_SIZE];
-    const char* menu_cmd = dmenu_cmd;
     char** menu_argv = dmenu_argv;
 
     while ((c = getopt (argc, argv, "hVa:r")) != -1) {
@@ -89,7 +85,6 @@ int main(int argc, char** argv) {
                 break;
             case 'r':
                 DBG("Using Rofi menu\n");
-                menu_cmd = rofi_cmd;
                 menu_argv = rofi_argv;
                 break;
         }
@@ -102,9 +97,9 @@ int main(int argc, char** argv) {
     size_t size;
     pid_t pid;
 
-    pid = popen2( menu_cmd, menu_argv, &child_in, &child_out );
+    pid = popen2( menu_argv[0], menu_argv, &child_in, &child_out );
     if ( pid < 0 ) {
-        errx(1, "Unable to popen2 %s", dmenu_cmd);
+        errx(1, "Unable to popen2 %s", menu_argv[0]);
     }
 
     throwEmojisAt(child_in);
@@ -138,10 +133,10 @@ int main(int argc, char** argv) {
 
     DBG("sending to xsel: '%s'\n", buff);
 
-    pid = popen2( xsel_cmd, xsel_argv, &child_in, &child_out);
+    pid = popen2( xsel_argv[0], xsel_argv, &child_in, &child_out);
     close(child_out);
     if ( pid < 0 ) {
-        errx(1, "Unable to popen2 %s", xsel_cmd);
+        errx(1, "Unable to popen2 %s", xsel_argv[0]);
     }
     dprintf(child_in, buff);
     close(child_in);
@@ -417,10 +412,10 @@ pid_t popen2(const char* cmd,  char* const argv[], int* in, int* out) {
             err(1, "command %s: unable to dup one of stdin/stdout", cmd);
         }
 
-        execv(cmd, argv );
+        execvp(cmd, argv );
 
         // unreachable
-        err(1, "execv %s failed", cmd);
+        err(1, "execvp %s failed", cmd);
     }
 }
 
@@ -429,7 +424,7 @@ void print_ver() {
 } 
 void print_help() {
     print_ver();
-    printf("\nCalls dmenu with a list of all base emojis available from the ICU library, then copies the selected emoji to clipboard\n");
+    printf("\nCalls dmenu or rofi with a list of all base emojis available from the ICU library, then copies the selected emoji to clipboard\n");
     printf("Options:\n");
     printf(" -r\t\tUse Rofi instead of dmenu (Rofi will be started in dmenu mode)\n");
     printf(" -a <path>\tFile/directory containing additional data (e.g.: ASCII arts, or more complex Unicode sequences)\n");
