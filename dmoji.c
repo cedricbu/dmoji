@@ -12,6 +12,7 @@
 #include <err.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <dirent.h>
 
 
 /* Unicode */
@@ -42,13 +43,15 @@
 #define DBG(...) do { if (DEBUG) dprintf(2, "DEBUG: " __VA_ARGS__); } while (0)
 
 #define BUFF_SIZE 128
+#define COMMENT_CHAR ' '
 
 
 void describeSet(USet* set);
 void describeUChar(UChar32 c);
 void throwOneEmoji(int fd, UChar32 c);
 int throwEmojisAt(int fd);
-int additional_data(int fd, const char* file);
+int additional_path(int fd, const char* file);
+int additional_file(int fd_out, const char* path);
 int clean_output(const char* sep, char* str);
 pid_t popen2(const char* cmd, char* const argv[], int* in, int* out);
 
@@ -57,21 +60,15 @@ void print_help();
 
 const char* separator = " ;";
 
-const char* dmenu_cmd = "/usr/bin/dmenu";
 char* dmenu_argv[] = { "dmenu", "-i", NULL };
 
-const char* rofi_cmd = "/usr/bin/rofi";
 char* rofi_argv[] = { "rofi", "-dmenu", "-i", NULL };
 
 char* const xsel_argv[] = { "xsel", "--input", "--clipboard", NULL }; 
-const char* xsel_cmd = "/usr/bin/xsel";
 
 int main(int argc, char** argv) {
-
     int c, opt_a=0;
     char append[BUFF_SIZE];
-    
-    const char* menu_cmd = dmenu_cmd;
     char** menu_argv = dmenu_argv;
 
     while ((c = getopt (argc, argv, "hVa:r")) != -1) {
@@ -88,7 +85,6 @@ int main(int argc, char** argv) {
                 break;
             case 'r':
                 DBG("Using Rofi menu\n");
-                menu_cmd = rofi_cmd;
                 menu_argv = rofi_argv;
                 break;
         }
@@ -101,18 +97,18 @@ int main(int argc, char** argv) {
     size_t size;
     pid_t pid;
 
-    pid = popen2( menu_cmd, menu_argv, &child_in, &child_out );
+    pid = popen2( menu_argv[0], menu_argv, &child_in, &child_out );
     if ( pid < 0 ) {
-        errx(1, "Unable to popen2 %s", dmenu_cmd);
+        errx(1, "Unable to popen2 %s", menu_argv[0]);
     }
 
     throwEmojisAt(child_in);
     if (opt_a) {
-         additional_data(child_in, append);
+         additional_path(child_in, append);
     }
     close(child_in);
     wait(&ret);
-    
+
     /* dmenu exit 0 on choice, 1 on no-choice (e.g.: escape) */
     if (WEXITSTATUS(ret) > 1 ) {
         warnx("dmenu seems to have returned an unusual exit: '%i'", WEXITSTATUS(ret));
@@ -124,7 +120,7 @@ int main(int argc, char** argv) {
     if ( size < 0) {
         err(1, "Could not read output from dmenu");
     }
-    
+
     if ( size == 0 || WEXITSTATUS(ret) == 1 ) {
         DBG("No choice\n"); // No choice selected
         return 0;
@@ -137,10 +133,10 @@ int main(int argc, char** argv) {
 
     DBG("sending to xsel: '%s'\n", buff);
 
-    pid = popen2( xsel_cmd, xsel_argv, &child_in, &child_out);
+    pid = popen2( xsel_argv[0], xsel_argv, &child_in, &child_out);
     close(child_out);
     if ( pid < 0 ) {
-        errx(1, "Unable to popen2 %s", xsel_cmd);
+        errx(1, "Unable to popen2 %s", xsel_argv[0]);
     }
     dprintf(child_in, buff);
     close(child_in);
@@ -156,7 +152,6 @@ int main(int argc, char** argv) {
  * Send a list of emojis to file descriptor provided
  * */
 int throwEmojisAt(int fd) {
-
     int32_t count, total = 0;
     USet* emojis;
     UChar32 start = UCHAR_MIN_VALUE, end = UCHAR_MIN_VALUE;
@@ -282,32 +277,84 @@ int clean_output(const char* sep, char* str) {
  * Read list of additional stuff
  *
  * */
-int additional_data(int fd, const char* file) {
+int additional_path(int fd, const char* path) {
     int count = 0;
-    FILE* f;
     struct stat st;
-    char buff[BUFF_SIZE];
 
-    DBG("Additional data from file '%s'\n", file);
+    DBG("Additional path from entry'%s'\n", path);
 
-    if ( stat(file, &st) || !S_ISREG(st.st_mode)) {
-        warn("Unable to stat %s, or is not a regular file. Make sure the file exist and is a regular file. Ignoring", file);
+    if ( stat(path, &st) ) {
+        warn("Unable to stat %s. Make sure the path exists and is accessible. Ignoring.", path);
         return 0;
     }
-    f = fopen(file, "r");
+    if (S_ISDIR(st.st_mode)) {
+        /* check all regular files from this directory */
+        DIR* dir = opendir(path);
+        struct dirent* dirt;
+        char final[BUFF_SIZE];
+
+        DBG("'%s' is a dir. Reading dir\n", path);
+
+        strcpy(final, path);
+        strncat(final, "/", BUFF_SIZE - strlen(final) - 1);
+
+        if ( dir == NULL ) {
+            warn("Unable to open directory %s. Ignoring.", path);
+            return 0;
+        }
+        while ( dirt = readdir(dir) ) {
+            /* Only use the file if it is regular or link */
+            if ( dirt->d_type == DT_REG || dirt->d_type == DT_LNK ) {
+                strncpy(final + (strlen(path)+1)*sizeof(char), dirt->d_name, BUFF_SIZE - strlen(path) - 2);
+                DBG("Adding entry %s.\n", final);
+                count += additional_file(fd, final);
+            } else {
+                DBG("Ignoring entry %s, not a regular or symlink\n", final);
+            }
+        }
+        closedir(dir);
+        
+
+    } else if (S_ISREG(st.st_mode)) {
+        count = additional_file(fd, path);
+    } else {
+        warnx("'%' Does not appear to be a supported file. It must be either regular or directory. Ignoring.", path);
+        return 0;
+    }
+
+    return count;
+}
+
+int additional_file(int fd_out, const char* path) {
+    FILE* f;
+    char buff[BUFF_SIZE];
+    size_t len;
+    int count;
+    struct stat st;
+
+    if ( stat(path, &st) || !S_ISREG(st.st_mode)) {
+        warn("Unable to stat %s, or is not a regular file. Make sure the file exist and is a regular file. Ignoring", path);
+        return 0;
+    }
+    f = fopen(path, "r");
     if ( !f ) {
-        warn("Unable to open %s for reading. Ignoring", file);
+        warn("Unable to open %s for reading. Ignoring", path);
         return 0;
     }
 
     while ( fgets(buff, BUFF_SIZE - 1, f)) {  // Read a full line
         // Lines starting with a space (' ') are considered as comments
-        if ( buff[0] == ' ') {
+        // TODO: Remove the EOL from this
+        if ( buff[0] == COMMENT_CHAR) {
+            char* nl = index(buff, '\n');
+            if (nl != NULL) {
+                *nl = '\0';
+            }
             DBG("Ignoring comment '%s'\n", buff);
             continue;
         }
         // Ensure there is a newline
-        size_t len = strlen(buff);
+        len = strlen(buff);
         if ( buff[len] != '\n' ) {
             buff[len] = '\n';
             buff[len + 1] = '\0';
@@ -315,7 +362,7 @@ int additional_data(int fd, const char* file) {
         if ( len > 1 ) {
             DBG("Adding an entry of %i size\n", len);
             count++;
-            dprintf(fd, buff);
+            dprintf(fd_out, buff);
         } else {
             DBG("Ignoring empty line\n");
         }
@@ -324,7 +371,6 @@ int additional_data(int fd, const char* file) {
     fclose(f);
     return count;
 }
-
 
 /* 
  * Exec `cmd` with args `argv[]`. 
@@ -366,10 +412,10 @@ pid_t popen2(const char* cmd,  char* const argv[], int* in, int* out) {
             err(1, "command %s: unable to dup one of stdin/stdout", cmd);
         }
 
-        execv(cmd, argv );
+        execvp(cmd, argv );
 
         // unreachable
-        err(1, "execv %s failed", cmd);
+        err(1, "execvp %s failed", cmd);
     }
 }
 
@@ -378,10 +424,10 @@ void print_ver() {
 } 
 void print_help() {
     print_ver();
-    printf("\nCalls dmenu with a list of all base emojis available from the ICU library, then copies the selected emoji to clipboard\n");
+    printf("\nCalls dmenu or rofi with a list of all base emojis available from the ICU library, then copies the selected emoji to clipboard\n");
     printf("Options:\n");
     printf(" -r\t\tUse Rofi instead of dmenu (Rofi will be started in dmenu mode)\n");
-    printf(" -a <file>\tFile containing additional data (e.g.: ASCII arts, or more complex Unicode sequences)\n");
+    printf(" -a <path>\tFile/directory containing additional data (e.g.: ASCII arts, or more complex Unicode sequences)\n");
     printf("\t\tAnything after the separator will be discarded before being sent to the clipboard\n");
     printf("\n\nAdditional data file:\n");
     printf("* Each line represents a new entry: the part to be copied, optionally followed by a separator ('%s') and a description to help the search\n", separator);
