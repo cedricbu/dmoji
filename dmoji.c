@@ -153,16 +153,13 @@ int main(int argc, char** argv) {
  * */
 int throwEmojisAt(int fd) {
     int32_t count, total = 0;
-    USet* emojis;
     UChar32 start = UCHAR_MIN_VALUE, end = UCHAR_MIN_VALUE;
     UChar u_buff[BUFF_SIZE];
     UErrorCode u_err = U_ZERO_ERROR;
 
-    // TODO: ICU v.63 has u_getBinaryPropertySet(), to get straight away per-property sets.
-    //       But this version is still too recent
-    emojis = uset_openEmpty();
-    uset_applyIntPropertyValue(emojis, UCHAR_EMOJI, TRUE, &u_err) ;
-    uset_removeRange(emojis, UCHAR_MIN_VALUE, 0xff);   // some regular ASCII are caught into UCHAR_EMOJI for some reason. 
+    /* Gather the list of all emojies */
+    const USet* emojis = u_getBinaryPropertySet(UCHAR_EMOJI, &u_err);
+
 
     if ( !U_SUCCESS(u_err) ) {
         warnx("error while applying EMOJI property: %s", u_errorName(u_err));
@@ -201,7 +198,6 @@ int throwEmojisAt(int fd) {
 
 close_return:
     DBG("Closing emoji set\n");
-    uset_close(emojis);
     return 0;
 }
 
@@ -213,7 +209,7 @@ void throwOneEmoji(int fd, UChar32 c) {
     int32_t count = 0;
     char buff[BUFF_SIZE];
     UErrorCode u_err = U_ZERO_ERROR;
-    UBool err = FALSE;
+    UBool err = false;
 
     memset(buff, 0, BUFF_SIZE);
     U8_APPEND(buff, count, BUFF_SIZE, c, err);
