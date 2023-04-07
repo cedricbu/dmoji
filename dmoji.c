@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
 
     pid = popen2( menu_argv[0], menu_argv, &child_in, &child_out );
     if ( pid < 0 ) {
-        errx(1, "Unable to popen2 %s", menu_argv[0]);
+        errx(2, "Unable to popen2 %s", menu_argv[0]);
     }
 
     throwEmojisAt(child_in);
@@ -118,12 +118,13 @@ int main(int argc, char** argv) {
     size = read(child_out, buff, BUFF_SIZE -1);
     close(child_out);
     if ( size < 0) {
-        err(1, "Could not read output from dmenu");
+        err(2, "Could not read output from dmenu");
     }
 
     if ( size == 0 || WEXITSTATUS(ret) == 1 ) {
         DBG("No choice\n"); // No choice selected
-        return 0;
+        // Return 1 to mimic dmenu's behavior
+        return 1;
     }
     if ( clean_output(separator, buff) ) {
         DBG("Cut '%s' from '%s'\n", separator, buff);
@@ -136,7 +137,7 @@ int main(int argc, char** argv) {
     pid = popen2( xsel_argv[0], xsel_argv, &child_in, &child_out);
     close(child_out);
     if ( pid < 0 ) {
-        errx(1, "Unable to popen2 %s", xsel_argv[0]);
+        errx(2, "Unable to popen2 %s", xsel_argv[0]);
     }
     dprintf(child_in, buff);
     close(child_in);
@@ -405,13 +406,13 @@ pid_t popen2(const char* cmd,  char* const argv[], int* in, int* out) {
         close(p_out[0]);
         if (dup2(p_in[0], 0) == -1 || dup2(p_out[1], 1) == -1) {
             // post fork: we can exit rather than return
-            err(1, "command %s: unable to dup one of stdin/stdout", cmd);
+            err(2, "command %s: unable to dup one of stdin/stdout", cmd);
         }
 
         execvp(cmd, argv );
 
         // unreachable
-        err(1, "execvp %s failed", cmd);
+        err(2, "execvp %s failed", cmd);
     }
 }
 
@@ -428,5 +429,9 @@ void print_help() {
     printf("\n\nAdditional data file:\n");
     printf("* Each line represents a new entry: the part to be copied, optionally followed by a separator ('%s') and a description to help the search\n", separator);
     printf("* Lines starting with a space (i.e.: ' ') are ignored as comments\n");
-    printf("\n");
+    printf("\n\n");
+    printf("Return value:\n");
+    printf("0: Success, data sent to clipboard\n");
+    printf("1: No data (user exited without selection)\n");
+    printf(">1: Something didn't go as planned\n");
 }
