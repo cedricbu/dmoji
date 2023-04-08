@@ -19,10 +19,10 @@ CFLAGS  += -DGIT_VERSION=\"$(GIT_VERSION)\" -DGIT_COMMIT=\"$(GIT_COMMIT)\" -DTAR
 
 $(TARGET): $(SOURCE)
 	icu-config --exists
-	$(CC) $(LDFLAGS) $(SOURCE) $(CFLAGS) -o $(TARGET)
+	$(CC) $(SOURCE) $(LDFLAGS) $(CFLAGS) -o $(TARGET)
 
 debug:
-	$(CC) $(LDFLAGS) -DDEBUG -fsanitize=address $(CFLAGS) $(SOURCE) -o $(TARGET)
+	$(CC) $(SOURCE) $(LDFLAGS) -DDEBUG -fsanitize=address $(CFLAGS) -o $(TARGET)
 
 install:
 	install -d $(DESTDIR)$(PREFIX)$(BINDIR)

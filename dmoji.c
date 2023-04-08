@@ -139,7 +139,7 @@ int main(int argc, char** argv) {
     if ( pid < 0 ) {
         errx(2, "Unable to popen2 %s", xsel_argv[0]);
     }
-    dprintf(child_in, buff);
+    dprintf(child_in, "%s", buff);
     close(child_in);
     wait(&ret);
     if (WEXITSTATUS(ret) > 0 ) {
@@ -315,7 +315,7 @@ int additional_path(int fd, const char* path) {
     } else if (S_ISREG(st.st_mode)) {
         count = additional_file(fd, path);
     } else {
-        warnx("'%' Does not appear to be a supported file. It must be either regular or directory. Ignoring.", path);
+        warnx("'%s' Does not appear to be a supported file. It must be either regular or directory. Ignoring.", path);
         return 0;
     }
 
@@ -357,9 +357,9 @@ int additional_file(int fd_out, const char* path) {
             buff[len + 1] = '\0';
         }
         if ( len > 1 ) {
-            DBG("Adding an entry of %i size\n", len);
+            DBG("Adding an entry of %zu size\n", len);
             count++;
-            dprintf(fd_out, buff);
+            dprintf(fd_out, "%s", buff);
         } else {
             DBG("Ignoring empty line\n");
         }
