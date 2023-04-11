@@ -46,10 +46,12 @@
 #define COMMENT_CHAR ' '
 
 
+// from Unicode
 void describeSet(USet* set);
 void describeUChar(UChar32 c);
-void throwOneEmoji(int fd, UChar32 c);
-int throwEmojisAt(int fd);
+
+void throw_one_emoji(int fd, UChar32 c);
+int throw_emojis_as(int fd);
 int additional_path(int fd, const char* file);
 int additional_file(int fd_out, const char* path);
 int clean_output(const char* sep, char* str);
@@ -102,7 +104,7 @@ int main(int argc, char** argv) {
         errx(2, "Unable to popen2 %s", menu_argv[0]);
     }
 
-    throwEmojisAt(child_in);
+    throw_emojis_as(child_in);
     if (opt_a) {
          additional_path(child_in, append);
     }
@@ -152,7 +154,7 @@ int main(int argc, char** argv) {
 /* 
  * Send a list of emojis to file descriptor provided
  * */
-int throwEmojisAt(int fd) {
+int throw_emojis_as(int fd) {
     int32_t count, total = 0;
     UChar32 start = UCHAR_MIN_VALUE, end = UCHAR_MIN_VALUE;
     UChar u_buff[BUFF_SIZE];
@@ -190,7 +192,7 @@ int throwEmojisAt(int fd) {
             DBG("got a range (size %i). From 0x%x to 0x%x\n", (end - start + 1), start, end);
             for(UChar32 j = start; j <= end; j++) {
                 total++;
-                throwOneEmoji(fd, j);
+                throw_one_emoji(fd, j);
             }
         }
     }
@@ -206,7 +208,7 @@ close_return:
  * write `c` and its name (space separated) to file descriptor fd)
  *
  * */
-void throwOneEmoji(int fd, UChar32 c) {
+void throw_one_emoji(int fd, UChar32 c) {
     int32_t count = 0;
     char buff[BUFF_SIZE];
     UErrorCode u_err = U_ZERO_ERROR;
