@@ -15,19 +15,19 @@ Unlike some other similar tools, dmoji does not use a static text file of emojis
 
 * On a Fedora based machine :
 
-```
+```sh
 $ sudo dnf install libicu libicu-devel dmenu xsel
 ```
 
 * On a Arch Linux based machine :
 
-```
+```sh
 $ sudo pacman -S icu dmenu xsel
 ```
 
 2) Compile
 
-```
+```sh
 $ make
 ```
 
@@ -35,29 +35,35 @@ $ make
 
 3.a) with dmenu
 
-```
+```sh
 $ ./dmoji
 ```
 
 3.b) with rofi
 
-```
+```sh
 $ ./dmoji -r
 ```
 
 Then choose an emoji and paste it in a text file.
 
-4) Also use the static ASCII arts file
+4) You can also add a single file, or a directory containing files, that will be appended at the end of the list
 
-```
+For example, use one of these commands to include all the files provided in the `additional-entries` directory, or only one file.
+
+```sh
+$ ./dmoji -a ./additional-entries/
+  # -or- 
 $ ./dmoji -a ./additional-entries/ascii-arts.txt
 ```
 
-Since the additional entries contain 'ASCII' as part of their description, type 'ascii' in dmenu to filter them.
+Each lines (except those starting with a `<space>`, used for comments) will be appended to the list of emojis. If such a line is selected, **only** the part preceding the separator ` ;` (character <space> followed by character semi-colon) will be used.
+
+Since, in the example above, the additional entries contain 'ASCII' as part of their description, type 'ascii' in dmenu/rofi to filter them.
 
 * To install it in /usr/local/bin
 
-```
+```sh
 $ sudo make install
 ```
 
@@ -65,20 +71,26 @@ $ sudo make install
 
 ## Via the command line
 
-```
+```sh
 $ ./dmoji -h
-dmoji version: 0.3-1-g4a6a62e, git 4a6a62e197279c0b2320124456c53af1d6809ab2
+dmoji version: 0.5-2-g186a4b0, git 186a4b05b6cce167cb4498335e1f47dd0dd3cf68
 
-Calls dmenu with a list of all base emojis available from the ICU library, then copies the selected emoji to clipboard
+Calls dmenu or rofi with a list of all base emojis available from the ICU library, then copies the selected emoji to clipboard
 Options:
- -r             Use Rofi instead of dmenu (Rofi will be started in dmenu mode)
- -a <file>      File containing additional data (e.g.: ASCII arts, or more complex Unicode sequences)
-                Anything after the separator will be discarded before being sent to the clipboard
+ -r     Use Rofi instead of dmenu (Rofi will be started in dmenu mode)
+ -a <path>  File/directory containing additional data (e.g.: ASCII arts, or more complex Unicode sequences)
+        Anything after the separator will be discarded before being sent to the clipboard
 
 
 Additional data file:
 * Each line represents a new entry: the part to be copied, optionally followed by a separator (' ;') and a description to help the search
 * Lines starting with a space (i.e.: ' ') are ignored as comments
+
+
+Return value:
+0: Success, data sent to clipboard
+1: No data (user exited without selection)
+>1: Something didn't go as planned
 ```
 
 ## Via a Window Manager shortcut
