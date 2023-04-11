@@ -342,7 +342,7 @@ int additional_file(int fd_out, const char* path) {
     while ( fgets(buff, BUFF_SIZE - 1, f)) {  // Read a full line
         // Lines starting with a space (' ') are considered as comments
         // TODO: Remove the EOL from this
-        if ( buff[0] == COMMENT_CHAR) {
+        if (buff[0] == COMMENT_CHAR) {
             char* nl = index(buff, '\n');
             if (nl != NULL) {
                 *nl = '\0';
@@ -352,11 +352,11 @@ int additional_file(int fd_out, const char* path) {
         }
         // Ensure there is a newline
         len = strlen(buff);
-        if ( buff[len] != '\n' ) {
-            buff[len] = '\n';
-            buff[len + 1] = '\0';
+        if ( buff[len-1] != '\n' ) {
+            buff[len-1] = '\n';
+            buff[len] = '\0';
         }
-        if ( len > 1 ) {
+        if ( len > 0 ) {
             DBG("Adding an entry of %zu size\n", len);
             count++;
             dprintf(fd_out, "%s", buff);
