@@ -55,6 +55,9 @@ int throw_emojis_as(int fd);
 int additional_path(int fd, const char* file);
 int additional_file(int fd_out, const char* path);
 int clean_output(const char* sep, char* str);
+int send_to_xsel(char* buff);
+int send_to_xdotool(char* buff);
+int simple_exec(char* const cmd[]);
 pid_t popen2(const char* cmd, char* const argv[], int* in, int* out);
 
 void print_ver();
@@ -66,14 +69,14 @@ char* dmenu_argv[] = { "dmenu", "-i", NULL };
 
 char* rofi_argv[] = { "rofi", "-dmenu", "-i", NULL };
 
-char* const xsel_argv[] = { "xsel", "--input", "--clipboard", NULL }; 
 
 int main(int argc, char** argv) {
     int c, opt_a=0;
     char append[BUFF_SIZE];
     char** menu_argv = dmenu_argv;
+    int (*sendToDest)(char*) = send_to_xsel;
 
-    while ((c = getopt (argc, argv, "hVa:r")) != -1) {
+    while ((c = getopt (argc, argv, "hVa:rt")) != -1) {
         switch(c) {
             case 'V':
                 print_ver();
@@ -88,6 +91,10 @@ int main(int argc, char** argv) {
             case 'r':
                 DBG("Using Rofi menu\n");
                 menu_argv = rofi_argv;
+                break;
+            case 't':
+                DBG("Type result to current window, not to clipboard\n");
+                sendToDest = send_to_xdotool;
                 break;
         }
     }
@@ -134,6 +141,39 @@ int main(int argc, char** argv) {
         DBG("'%s' was not found in returned '%s'\n", separator, buff);
     }
 
+    ret = sendToDest(buff);
+
+    if (ret > 1){
+        return 2;
+    } else {
+        return 0;
+    }
+}
+
+/* 
+ * Send the data to xdotool
+ * */
+int send_to_xdotool(char* buff){
+    int ret;
+    char* const cmd[] = {"xdotool", "getactivewindow", "type", buff, NULL};
+    DBG("Running xdotool, typing '%s'", buff);
+    ret = simple_exec(cmd);
+    if (ret) {
+        warn("xdotool returned an error: '%i'", ret);
+    }
+
+    return ret;
+}
+
+/*
+ * Send the data to xsel
+ * */
+int send_to_xsel(char* buff){
+    char* const xsel_argv[] = { "xsel", "--input", "--clipboard", NULL }; 
+    int child_in, child_out;
+    pid_t pid;
+    int ret;
+
     DBG("sending to xsel: '%s'\n", buff);
 
     pid = popen2( xsel_argv[0], xsel_argv, &child_in, &child_out);
@@ -147,7 +187,8 @@ int main(int argc, char** argv) {
     if (WEXITSTATUS(ret) > 0 ) {
         warnx("xsel seems to have returned an unusual exit: '%i'", WEXITSTATUS(ret));
     }
-    return 0;
+
+    return WEXITSTATUS(ret);
 }
 
 
@@ -372,6 +413,43 @@ int additional_file(int fd_out, const char* path) {
 }
 
 /* 
+ * A simple execute command that returns the command's return
+ * Note:
+ * - We can't use system() because there's no easy way to protect the characters in libc
+ * */
+int simple_exec(char* const cmd[]) {
+    pid_t pid;
+    int child_status;
+
+    pid = fork();
+    if (pid < 0 ){
+        warn("simple_exec(): Unable to fork to command");
+        return pid;
+    }
+
+    if (pid > 0) {
+        // Parent
+        int count = 0;
+        pid_t tmp_pid;
+        do {
+            tmp_pid = waitpid(pid, &child_status, 0);
+            if (tmp_pid == -1){
+                warn("simpler_exec() waitpid failed");
+            }
+        } while(tmp_pid != pid);
+
+        return child_status;
+    } else {
+        // Child
+        DBG("simple_exec[child] executes: %s\n", cmd[0]);
+        execvp(cmd[0], cmd);
+
+        // unreachable
+        err(2, "execvp %s failed", cmd[0]);
+    }
+}
+
+/* 
  * Exec `cmd` with args `argv[]`. 
  * fill up `in` and `out` piping to cmd
  * returns cmd's PID (-1 on error. A warning with errno will be printed)
@@ -425,6 +503,7 @@ void print_help() {
     print_ver();
     printf("\nCalls dmenu or rofi with a list of all base emojis available from the ICU library, then copies the selected emoji to clipboard\n");
     printf("Options:\n");
+    printf(" -t\t\tFeed the active window with the selection, instead of copying it to the clipboard (requires xdotool)\n");
     printf(" -r\t\tUse Rofi instead of dmenu (Rofi will be started in dmenu mode)\n");
     printf(" -a <path>\tFile/directory containing additional data (e.g.: ASCII arts, or more complex Unicode sequences)\n");
     printf("\t\tAnything after the separator will be discarded before being sent to the clipboard\n");
